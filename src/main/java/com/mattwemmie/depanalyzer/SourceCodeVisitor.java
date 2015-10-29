@@ -26,6 +26,7 @@ import com.github.javaparser.ParseException;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.PackageDeclaration;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.visitor.GenericVisitorAdapter;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
@@ -68,14 +69,22 @@ public class SourceCodeVisitor extends SimpleFileVisitor<Path> {
 	        	CompilationUnit cu = JavaParser.parse(in);
 	        	
 	        	System.out.println("File=" + file.getFileName());
-	        	
 	        	System.out.println("contains " + cu.getEndLine() + " lines of code");
+	        	
+	        	
 	        	
 	        	String packageName = new PackageDeclarationVisitor().visit(cu,  null);
 	        	System.out.println("Package=" + packageName);
 	        	JavaPackage javaPackage = new JavaPackage(packageName);
 	    		// currently this inserts a new one for each duplicate - if don't, it blows up later when building relationships (not sure why)
 	    		javaPackageRepository.save(javaPackage);
+	    		
+	    		// class
+	    		String fullyQualifiedClass = packageName + "." + new ClassOrInterfaceDeclarationVisitor().visit(cu, null);
+	    		System.out.println("Fully qualified class=" + fullyQualifiedClass);
+	    		JavaClass javaClass = new JavaClass(fullyQualifiedClass);
+	        	javaClass.linesOfCode = cu.getEndLine();
+	        	neo4jTemplate.save(javaClass);
 		    		
 	        	List<String> imports = new ArrayList<>();
 	        	new ImportDeclarationVisitor().visit(cu,  imports);
@@ -168,6 +177,14 @@ public class SourceCodeVisitor extends SimpleFileVisitor<Path> {
     		imports.add(importDeclaration);
     		
     		
+    	}
+    }
+    
+    private class ClassOrInterfaceDeclarationVisitor extends GenericVisitorAdapter<String, Object> {
+    	
+    	@Override
+    	public String visit(ClassOrInterfaceDeclaration n, Object arg) {
+    		return n.getName();
     	}
     }
 }
