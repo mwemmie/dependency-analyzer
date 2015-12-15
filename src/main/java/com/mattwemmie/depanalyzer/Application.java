@@ -65,8 +65,8 @@ public class Application implements CommandLineRunner {
 		
 		try {
 
-			Path startingDir = Paths.get("/Users/mattwemmie/Documents/workspace/depanalyzer/dependency-analyzer");
-			//Path startingDir = Paths.get("/Users/mattwemmie/Desktop/Java/Git");
+			//Path startingDir = Paths.get("/Users/mattwemmie/Documents/workspace/depanalyzer/dependency-analyzer");
+			Path startingDir = Paths.get("/Users/mattwemmie/Desktop/Java/Git");
 			
 			Files.walkFileTree(startingDir, new SourceCodeVisitor(javaPackageRepository, graphDatabase, neo4jTemplate));
 			

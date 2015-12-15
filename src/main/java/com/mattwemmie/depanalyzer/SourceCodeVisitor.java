@@ -27,6 +27,10 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.ModifierSet;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.visitor.GenericVisitorAdapter;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
@@ -68,22 +72,36 @@ public class SourceCodeVisitor extends SimpleFileVisitor<Path> {
 	            // parse the file
 	        	CompilationUnit cu = JavaParser.parse(in);
 	        	
-	        	System.out.println("File=" + file.getFileName());
-	        	System.out.println("contains " + cu.getEndLine() + " lines of code");
-	        	
-	        	
+	        	//System.out.println("File=" + file.getFileName());
+	        	//System.out.println("contains " + cu.getEndLine() + " lines of code");
 	        	
 	        	String packageName = new PackageDeclarationVisitor().visit(cu,  null);
 	        	System.out.println("Package=" + packageName);
+	        	
+	        	if(packageName == null) {
+	        		packageName = "ROOT";
+	        	}
+	        	
 	        	JavaPackage javaPackage = new JavaPackage(packageName);
 	    		// currently this inserts a new one for each duplicate - if don't, it blows up later when building relationships (not sure why)
-	    		javaPackageRepository.save(javaPackage);
 	    		
+	    		javaPackageRepository.save(javaPackage);
+	    			
 	    		// class
-	    		String fullyQualifiedClass = packageName + "." + new ClassOrInterfaceDeclarationVisitor().visit(cu, null);
-	    		System.out.println("Fully qualified class=" + fullyQualifiedClass);
-	    		JavaClass javaClass = new JavaClass(fullyQualifiedClass);
+	    		String className = new ClassOrInterfaceDeclarationVisitor().visit(cu, null);
+	    		String fullyQualifiedClass = packageName + "." + className;
+	    		//System.out.println("Fully qualified class=" + fullyQualifiedClass);
+	    		
+	    		List<String> fields = new ArrayList<>();
+	    		//System.out.println("Fields:");
+	        	new FieldDeclarationVisitor().visit(cu, fields);
+	        	
+	        	List<String> methods = new ArrayList<>();
+	        	new MethodDeclarationVisitor().visit(cu, methods);
+	        	
+	    		JavaClass javaClass = new JavaClass(fullyQualifiedClass, className, fields, methods);
 	        	javaClass.linesOfCode = cu.getEndLine();
+	        	System.out.println("JavaClass=" + javaClass.toString());
 	        	neo4jTemplate.save(javaClass);
 		    		
 	        	List<String> imports = new ArrayList<>();
@@ -91,16 +109,22 @@ public class SourceCodeVisitor extends SimpleFileVisitor<Path> {
 	        	System.out.println("imports in " + file.getFileName() + " are " + imports);
 	        	for(String importedPackage : imports) {
 	        		
-	        		// filter out specific dependencies (don't create nodes/rels for them)
-	        		if(!importedPackage.startsWith("java")) {
-			        	JavaPackage dependencyPackage = new JavaPackage(importedPackage);
-		        		// currently this inserts a new one for each duplicate
-		        		javaPackageRepository.save(dependencyPackage);
-	
-			    		PackageDependency dep = new PackageDependency(javaPackage, dependencyPackage);
-			    		neo4jTemplate.save(dep);		
+	        		if(importedPackage != null) {
+		        		// filter out specific dependencies (don't create nodes/rels for them)
+		        		if(!importedPackage.startsWith("java")) {
+				        	JavaPackage dependencyPackage = new JavaPackage(importedPackage);
+			        		// currently this inserts a new one for each duplicate
+			        		javaPackageRepository.save(dependencyPackage);
+		
+				    		PackageDependency dep = new PackageDependency(javaPackage, dependencyPackage);
+				    		neo4jTemplate.save(dep);		
+		        		}
+	        		} else {
+	        			System.out.println("nulll imported package for " + importedPackage);
 	        		}
 	        	}
+	        	
+	        	
 	        	
 	        } catch (ParseException e) {
 				// TODO Auto-generated catch block
@@ -158,7 +182,10 @@ public class SourceCodeVisitor extends SimpleFileVisitor<Path> {
     	public String visit(PackageDeclaration n, Object arg) {
     		//System.out.println("visiting package declaration");
     		//System.out.println("Package=" + n.getName());
-    		JavaPackage javaPackage = new JavaPackage(n.getName().toString());
+    		if(n==null || n.getName()==null || n.getName().toString()==null) {
+    			return "ROOT";
+    		}
+    		
     		return n.getName().toString();
     		// currently this inserts a new one for each duplicate
     		//javaPackageRepository.save(javaPackage);
@@ -185,6 +212,54 @@ public class SourceCodeVisitor extends SimpleFileVisitor<Path> {
     	@Override
     	public String visit(ClassOrInterfaceDeclaration n, Object arg) {
     		return n.getName();
+    	}
+    }
+    
+    private class FieldDeclarationVisitor extends VoidVisitorAdapter<List<String>> {
+    	
+    	@Override
+    	public void visit(FieldDeclaration n, List<String> fields) {
+
+    		//System.out.println(n.toStringWithoutComments());
+    		// prints "@GraphId Long id;"
+    		
+    		//System.out.println("modifiers=" + n.getModifiers() + ", Type=" + n.getType() + ", variables=" + n.getVariables());
+    		
+    		if(n.getModifiers() == ModifierSet.PRIVATE) { 
+	    		if(n.getVariables().size() == 0) {
+	    			fields.add(n.getType() + " " + n.getVariables().get(0));
+	    		} else {
+	    			for(VariableDeclarator variable : n.getVariables()) {
+	    				fields.add(n.getType() + " " + variable);
+	    			}
+	    		}
+    		}
+    		// modifiers 0=package private, 1=public, 2=private
+    		// prints "modifiers=0, Type=Long, variables=[id]"
+    		
+    		/*
+    		 * Could use above info to filter appropriately for just what we care about based on 
+    		 * modifier, types, variable name, annotation, etc.
+    		 */
+    	}
+    }
+    
+    private class MethodDeclarationVisitor extends VoidVisitorAdapter<List<String>> {
+    	
+    	@Override
+    	public void visit(MethodDeclaration n, List<String> fields) {
+
+    		if(n.getModifiers() == ModifierSet.PUBLIC) {
+    			fields.add(n.getDeclarationAsString(false, false));
+    			
+    			//System.out.println(n.getDeclarationAsString(false, false)); // Object clone()
+    			
+        		// Can do it however we want - some other options include:
+        		//System.out.println(n.getDeclarationAsString());  // protected Object clone() throws CloneNotSupportedException
+        		//System.out.println(n.getDeclarationAsString(true, false, true)); // protected Object clone()
+    		}
+
+
     	}
     }
 }
