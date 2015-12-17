@@ -2,33 +2,18 @@ package com.mattwemmie.depanalyzer;
 
 import java.util.Set;
 
-import org.neo4j.graphdb.Direction;
-import org.springframework.data.neo4j.annotation.Fetch;
-import org.springframework.data.neo4j.annotation.GraphId;
-import org.springframework.data.neo4j.annotation.Indexed;
 import org.springframework.data.neo4j.annotation.NodeEntity;
-import org.springframework.data.neo4j.annotation.RelatedTo;
 
 @NodeEntity
 public class JavaPackage {
 
-	@GraphId Long id;
-    @Indexed(unique = true) public String name;
+	private String name;
     
-    // not sure on this but it appears to cause infinite recursion
-/*    @RelatedTo(type = "PACKAGE_DEPENDENCY", direction = Direction.INCOMING)
-    @Fetch
-    public Set<JavaPackage> incomingJavaPackages;*/
-
-    @RelatedTo(type = "PACKAGE_DEPENDENCY", direction = Direction.OUTGOING)
-    @Fetch
-    public Set<JavaPackage> outGoingJavaPackages;
+    //@RelatedTo(type = "PACKAGE_DEPENDENCY", direction = Direction.OUTGOING)
+    private Set<JavaPackage> outGoingJavaPackages;
     
-    public JavaPackage() {}
-    public JavaPackage(String name) { this.name = name; }
-    
-    public PackageDependency dependsOn(JavaPackage endPackage) {
-    	return new PackageDependency(this, endPackage);
+    public JavaPackage(String name) { 
+    	this.name = name; 
     }
     
     @Override
@@ -59,6 +44,16 @@ public class JavaPackage {
 			return false;
 		return true;
 	}
-    
-    
+	public String getName() {
+		return name;
+	}
+	public void setName(String name) {
+		this.name = name;
+	}
+	public Set<JavaPackage> getOutGoingJavaPackages() {
+		return outGoingJavaPackages;
+	}
+	public void setOutGoingJavaPackages(Set<JavaPackage> outGoingJavaPackages) {
+		this.outGoingJavaPackages = outGoingJavaPackages;
+	}
 }

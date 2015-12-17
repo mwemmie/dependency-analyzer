@@ -2,26 +2,41 @@ package com.mattwemmie.depanalyzer;
 
 import org.springframework.data.neo4j.annotation.EndNode;
 import org.springframework.data.neo4j.annotation.Fetch;
-import org.springframework.data.neo4j.annotation.GraphId;
 import org.springframework.data.neo4j.annotation.RelationshipEntity;
 import org.springframework.data.neo4j.annotation.StartNode;
 
 @RelationshipEntity(type = "PACKAGE_DEPENDENCY")
 public class PackageDependency {
-	@GraphId Long id;
-	@Fetch @StartNode JavaPackage startPackage;
-	@Fetch @EndNode JavaPackage endPackage;
+
+	@Fetch @StartNode private String startPackage;
+	@Fetch @EndNode private String endPackage;
 	
-	public PackageDependency() {}
-	
-	public PackageDependency(JavaPackage startPackage, JavaPackage endPackage) {
+	public PackageDependency(String startPackage, String endPackage) {
 		this.startPackage = startPackage;
 		this.endPackage = endPackage;
 	}
 	
+	public String getStartPackage() {
+		return startPackage;
+	}
+
+	public void setStartPackage(String startPackage) {
+		this.startPackage = startPackage;
+	}
+
+	public String getEndPackage() {
+		return endPackage;
+	}
+
+	public void setEndPackage(String endPackage) {
+		this.endPackage = endPackage;
+	}
+
+
+
 	@Override
 	public String toString() {
-		return startPackage.name + " -> " + endPackage.name;
+		return startPackage + " -> " + endPackage;
 	}
 
 	@Override
@@ -54,18 +69,4 @@ public class PackageDependency {
 			return false;
 		return true;
 	}
-
-	public Long getId() {
-		return id;
-	}
-
-	public JavaPackage getStartPackage() {
-		return startPackage;
-	}
-
-	public JavaPackage getEndPackage() {
-		return endPackage;
-	}
-	
-	
 }

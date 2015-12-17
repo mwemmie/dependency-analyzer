@@ -11,22 +11,19 @@ import java.nio.file.PathMatcher;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.neo4j.core.GraphDatabase;
-import org.springframework.data.neo4j.support.Neo4jTemplate;
-import org.springframework.stereotype.Component;
+import org.supercsv.cellprocessor.Optional;
+import org.supercsv.cellprocessor.constraint.NotNull;
+import org.supercsv.cellprocessor.constraint.Unique;
+import org.supercsv.cellprocessor.ift.CellProcessor;
+import org.supercsv.io.ICsvBeanWriter;
 
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParseException;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.PackageDeclaration;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.ModifierSet;
@@ -34,28 +31,20 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.visitor.GenericVisitorAdapter;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
-@Component // doesn't seem to be registering...
 public class SourceCodeVisitor extends SimpleFileVisitor<Path> {
 	
-	@Autowired
-	public SourceCodeVisitor(JavaPackageRepository javaPackageRepository, GraphDatabase graphDatabase, Neo4jTemplate neo4jTemplate) {
-		this.javaPackageRepository = javaPackageRepository;
-		this.graphDatabase = graphDatabase;
-		this.neo4jTemplate = neo4jTemplate;
-	}
-
-	private JavaPackageRepository javaPackageRepository;
-	private GraphDatabase graphDatabase;
-	private Neo4jTemplate neo4jTemplate;
+    private static final String[] javaClassHeader = new String[] { "fullyQualifiedName", "name", "csvFormattedPublicMethods", "linesOfCode", "csvFormattedPrivateInstanceVariables", "javaPackage" };
+	private ICsvBeanWriter javaClassCsvWriter;
 	
-/*	public static void main(String[] args) throws IOException {
-		
-		Path startingDir = Paths.get("/Users/mattwemmie/Documents/workspace/depanalyzer/dependency-analyzer");
-		//Path startingDir = Paths.get("/Users/mattwemmie/Desktop/Java/Git");
-
-		Files.walkFileTree(startingDir, new MyFileVisitor());
-	}*/
-		
+	private static final String[] javaPackageDependencyHeader = new String[] { "startPackage", "endPackage" };
+	private ICsvBeanWriter javaPackageDependencyCsvWriter;
+	
+	public SourceCodeVisitor(ICsvBeanWriter javaClassCsvWriter, 
+							 ICsvBeanWriter javaPackageDependencyCsvWriter) {
+		this.javaClassCsvWriter = javaClassCsvWriter;
+		this.javaPackageDependencyCsvWriter = javaPackageDependencyCsvWriter;
+	}
+	
 	private final PathMatcher matcher = FileSystems.getDefault()
             .getPathMatcher("glob:*.java");
 	
@@ -72,8 +61,8 @@ public class SourceCodeVisitor extends SimpleFileVisitor<Path> {
 	            // parse the file
 	        	CompilationUnit cu = JavaParser.parse(in);
 	        	
-	        	//System.out.println("File=" + file.getFileName());
-	        	//System.out.println("contains " + cu.getEndLine() + " lines of code");
+	        	String fileName = file.toString();
+	        	System.out.println("File=" + file.getFileName());
 	        	
 	        	String packageName = new PackageDeclarationVisitor().visit(cu,  null);
 	        	System.out.println("Package=" + packageName);
@@ -83,12 +72,18 @@ public class SourceCodeVisitor extends SimpleFileVisitor<Path> {
 	        	}
 	        	
 	        	JavaPackage javaPackage = new JavaPackage(packageName);
-	    		// currently this inserts a new one for each duplicate - if don't, it blows up later when building relationships (not sure why)
-	    		
-	    		javaPackageRepository.save(javaPackage);
+	        	// intentionally don't write out packages to CSV - only do that for packages this class is dependent on 
+	        	// because they potentially may never be captured in a source code scan (i.e. outside dependencies)
 	    			
 	    		// class
-	    		String className = new ClassOrInterfaceDeclarationVisitor().visit(cu, null);
+	        	String className = cu.getTypes().get(0).getName();
+	        	if(cu.getTypes().size() > 1) {
+	        		System.out.println("file=" + fileName + " has multiple type definitions but only used the first - (temporary intentional bug)");
+	        	}
+	        	
+	        	// temporarily using cu.getTypes().get(0) to get other types such as Enum
+	    		//String className = new ClassOrInterfaceDeclarationVisitor().visit(cu, null);
+	        	
 	    		String fullyQualifiedClass = packageName + "." + className;
 	    		//System.out.println("Fully qualified class=" + fullyQualifiedClass);
 	    		
@@ -99,10 +94,11 @@ public class SourceCodeVisitor extends SimpleFileVisitor<Path> {
 	        	List<String> methods = new ArrayList<>();
 	        	new MethodDeclarationVisitor().visit(cu, methods);
 	        	
-	    		JavaClass javaClass = new JavaClass(fullyQualifiedClass, className, fields, methods);
-	        	javaClass.linesOfCode = cu.getEndLine();
+	        	int linesOfCode = cu.getEndLine();
+	    		JavaClass javaClass = new JavaClass(fullyQualifiedClass, className, fields, methods, linesOfCode, packageName);
+	        	
 	        	System.out.println("JavaClass=" + javaClass.toString());
-	        	neo4jTemplate.save(javaClass);
+	        	javaClassCsvWriter.write(javaClass, javaClassHeader, getJavaClassProcessors());
 		    		
 	        	List<String> imports = new ArrayList<>();
 	        	new ImportDeclarationVisitor().visit(cu,  imports);
@@ -111,13 +107,10 @@ public class SourceCodeVisitor extends SimpleFileVisitor<Path> {
 	        		
 	        		if(importedPackage != null) {
 		        		// filter out specific dependencies (don't create nodes/rels for them)
-		        		if(!importedPackage.startsWith("java")) {
-				        	JavaPackage dependencyPackage = new JavaPackage(importedPackage);
-			        		// currently this inserts a new one for each duplicate
-			        		javaPackageRepository.save(dependencyPackage);
+		        		if(!importedPackage.startsWith("java")) {	        	
 		
-				    		PackageDependency dep = new PackageDependency(javaPackage, dependencyPackage);
-				    		neo4jTemplate.save(dep);		
+				    		PackageDependency dep = new PackageDependency(javaPackage.getName(), importedPackage);
+				    		javaPackageDependencyCsvWriter.write(dep, javaPackageDependencyHeader, getJavaPackageDependencyProcessors());	
 		        		}
 	        		} else {
 	        			System.out.println("nulll imported package for " + importedPackage);
@@ -175,7 +168,8 @@ public class SourceCodeVisitor extends SimpleFileVisitor<Path> {
         System.err.println(exc);
         return CONTINUE;
     }
-	
+ 
+
     private class PackageDeclarationVisitor extends GenericVisitorAdapter<String, Object> {
     	
     	@Override
@@ -207,13 +201,13 @@ public class SourceCodeVisitor extends SimpleFileVisitor<Path> {
     	}
     }
     
-    private class ClassOrInterfaceDeclarationVisitor extends GenericVisitorAdapter<String, Object> {
+/*    private class ClassOrInterfaceDeclarationVisitor extends GenericVisitorAdapter<String, Object> {
     	
     	@Override
     	public String visit(ClassOrInterfaceDeclaration n, Object arg) {
     		return n.getName();
     	}
-    }
+    }*/
     
     private class FieldDeclarationVisitor extends VoidVisitorAdapter<List<String>> {
     	
@@ -261,5 +255,30 @@ public class SourceCodeVisitor extends SimpleFileVisitor<Path> {
 
 
     	}
+    }
+    
+    private static CellProcessor[] getJavaClassProcessors() {
+        
+        final CellProcessor[] processors = new CellProcessor[] { 
+                new Unique(), // fullyQualifiedName
+                new NotNull(), // name
+                new Optional(),
+                new NotNull(), 
+                new Optional(), 
+                new NotNull()
+                
+        };
+        
+        return processors;
+    }
+    
+    private static CellProcessor[] getJavaPackageDependencyProcessors() {
+        
+        final CellProcessor[] processors = new CellProcessor[] { 
+        		new NotNull(), 
+                new NotNull()
+        };
+        
+        return processors;
     }
 }
