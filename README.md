@@ -24,7 +24,6 @@ Loading graph files to Neo4j
 
 # Todo (non-exhaustive list)
 * Add better doc
-* Externalize configuration
 * Tune neo4j load queries for better performance
 
 # Screenshots
