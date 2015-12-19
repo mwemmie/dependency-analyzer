@@ -10,13 +10,18 @@ In this intial implementation, a root folder is specified, then all subfolders a
 Word of caution, this is still in very early development, the code is not very clean, yet, and there are a lot of hard coded paths, etc. that eventually should be cleaned up, externalized, etc.  Just trying to get to a working prototype quickly at this point to see if this effort should continue :)
 
 # Usage
+Performing analysis and building .csv graph files
 * Clone this repo
-* Edit source code to change paths as necessary (hope to externalize this config soon!)
+* Edit ```analyzer.properties``` in the source code to configure the starting directory for source code scan (rootSourceDirectory) and also an output directory for the resulting graph files (neo4jCsvGraphOutputDirectory)
 * Run "mvn package" to build an executable jar file
-* Execute the built jar file using "java -jar <filename" to perform static analysis
+* Execute the built jar file using "java -jar dependency-analyzer-0.0.1-SNAPSHOT.jar" to perform static analysis
+Loading graph files to Neo4j
+* Download and install neo4j
+* Move the .csv files and the files in "scripts/" to the root neo4j folder
+* Run "sh loadAnalysis.sh" to load the neo4j graph database
+
 
 # Todo (non-exhaustive list)
-* Remove hard coded paths
 * Add better doc
 * Externalize configuration
 * Tune neo4j load queries for better performance
