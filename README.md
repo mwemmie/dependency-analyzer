@@ -15,6 +15,7 @@ Performing analysis and building .csv graph files
 * Edit ```analyzer.properties``` in the source code to configure the starting directory for source code scan (```rootSourceDirectory```) and also an output directory for the resulting graph files (```neo4jCsvGraphOutputDirectory```)
 * Run ```mvn package``` to build an executable jar file
 * Execute the built jar file using ```java -jar dependency-analyzer-0.0.1-SNAPSHOT.jar``` to perform static analysis
+
 Loading graph files to Neo4j
 * Download and install neo4j
 * Move the .csv files and the files in ```scripts/``` to the root neo4j folder
