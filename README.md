@@ -12,13 +12,13 @@ Word of caution, this is still in very early development, the code is not very c
 # Usage
 Performing analysis and building .csv graph files
 * Clone this repo
-* Edit ```analyzer.properties``` in the source code to configure the starting directory for source code scan (rootSourceDirectory) and also an output directory for the resulting graph files (neo4jCsvGraphOutputDirectory)
-* Run "mvn package" to build an executable jar file
-* Execute the built jar file using "java -jar dependency-analyzer-0.0.1-SNAPSHOT.jar" to perform static analysis
+* Edit ```analyzer.properties``` in the source code to configure the starting directory for source code scan (```rootSourceDirectory```) and also an output directory for the resulting graph files (```neo4jCsvGraphOutputDirectory```)
+* Run ```mvn package``` to build an executable jar file
+* Execute the built jar file using ```java -jar dependency-analyzer-0.0.1-SNAPSHOT.jar``` to perform static analysis
 Loading graph files to Neo4j
 * Download and install neo4j
-* Move the .csv files and the files in "scripts/" to the root neo4j folder
-* Run "sh loadAnalysis.sh" to load the neo4j graph database
+* Move the .csv files and the files in ```scripts/``` to the root neo4j folder
+* Run ```sh loadAnalysis.sh``` to load the neo4j graph database
 
 
 # Todo (non-exhaustive list)
